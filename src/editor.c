@@ -39,7 +39,7 @@ static void bmove_cursor(struct Buffer* cur_buf, uint16_t x, uint16_t y) {
 static void draw_welcome_msg(struct Buffer* buf) {
     static uint8_t can_draw = 1;                            // If zero, the welcome message will not be written to stdout.
 
-    if (can_draw) {
+    if (can_draw && ed.target_filepath == NULL) {
         can_draw = 0;
     } else {
         return;
@@ -204,12 +204,12 @@ static void editor_open(const char* filepath) {
 
 
 void run(const char* filepath) {
+    ed.target_filepath = NULL;
     ed.cxpos = ed.cypos = 0;
     
     getwinsize(&ed.termrows, &ed.termcols);
-    refresh_screen();
-
     editor_open(filepath);
+    refresh_screen();
 
     char c;
     while ((c = read_key()) != CTRL_KEY('q')) {
