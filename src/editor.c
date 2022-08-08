@@ -3,18 +3,22 @@
 #include <termios.h>
 #include <ctype.h>
 #include <string.h>
+#include <stddef.h>
 #include <def.h>
 #include <err.h>
 #include <buf.h>
 #include <term.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 struct Editor {
     uint32_t termrows;
     uint32_t termcols;
     uint16_t cxpos;             // Cursor x position.
     uint16_t cypos;             // Cursor y position.
+    struct Buffer row;
+    size_t n_rows;
 } ed;
 
 
@@ -32,6 +36,14 @@ static void bmove_cursor(struct Buffer* cur_buf, uint16_t x, uint16_t y) {
 }
 
 static void draw_welcome_msg(struct Buffer* buf) {
+    static uint8_t can_draw = 1;                            // If zero, the welcome message will not be written to stdout.
+
+    if (can_draw) {
+        can_draw = 0;
+    } else {
+        return;
+    }
+
     char welcome[120];
     uint32_t wlen = snprintf(welcome, sizeof(welcome), "KessEdit -- v%s\r\n", KESSEDIT_VERSION);
 
@@ -55,11 +67,14 @@ static void draw_welcome_msg(struct Buffer* buf) {
 static void draw_rows(struct Buffer* buf) {
     for (uint32_t i = 0; i < ed.termrows; ++i) {
         bufinsert(buf, "\x1b[K", 3);            // Clear one line at a time.
-        
+
         if (i == ed.termrows / 3) {
             draw_welcome_msg(buf);
-        } else {
+        } else if (i > ed.n_rows) {
             bufinsert(buf, "~\r\n", 3);
+        } else if (i < ed.n_rows) {
+            bufinsert(buf, ed.row.data, ed.row.len);
+            bufinsert(buf, "\r\n", 2);              
         }
     }
 }
@@ -128,7 +143,7 @@ static void process_keystroke(char c) {
 
             break;
         case LEFT_ARROW:
-            if (ed.cxpos > 1) {
+            if (ed.cxpos > 0) {
                 --ed.cxpos;
             }
 
@@ -142,13 +157,28 @@ static void process_keystroke(char c) {
     }
 }
 
+void editor_open(void) {
+    ed.n_rows = 1;
+    ed.row = mkbuf();
+    const char* line = "Hello, World!";
+    bufinsert(&ed.row, line, strlen(line));
+    write(STDOUT_FILENO, ed.row.data, ed.row.len);
+
+    // Ensure the cursor starts at (0, 0).
+    struct Buffer buf = mkbuf();
+    bmove_cursor(&buf, 0, 0);
+    bufdump(buf);
+    destroybuf(&buf);
+}
+
 
 void run(void) {
     ed.cxpos = ed.cypos = 0;
-
+    
     getwinsize(&ed.termrows, &ed.termcols);
-
     refresh_screen();
+
+    editor_open();
 
     char c;
     while ((c = read_key()) != CTRL_KEY('q')) {

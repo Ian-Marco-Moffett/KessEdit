@@ -14,7 +14,7 @@ struct Buffer {
 
 struct Buffer mkbuf(void);
 void destroybuf(struct Buffer* buf);
-void bufinsert(struct Buffer* buf, BUF_DATA* data, size_t len);
+void bufinsert(struct Buffer* buf, const BUF_DATA* data, size_t len);
 void bufdump(struct Buffer buf);            // Dumps buffer into stdout.
 
 #endif

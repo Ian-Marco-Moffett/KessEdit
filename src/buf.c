@@ -13,7 +13,7 @@ struct Buffer mkbuf(void) {
 }
 
 
-void bufinsert(struct Buffer* buf, BUF_DATA* data, size_t len) {
+void bufinsert(struct Buffer* buf, const BUF_DATA* data, size_t len) {
     char* new = realloc(buf->data, buf->len + (len + 1));
 
     if (new == NULL) {

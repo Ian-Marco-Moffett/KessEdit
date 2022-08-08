@@ -3,6 +3,7 @@
 
 
 void run(void);
+void editor_open(void);
 
 
 #endif
