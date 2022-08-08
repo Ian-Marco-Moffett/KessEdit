@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     // Clear terminal.
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
+    restore_state();
 
     return 0;
 }
