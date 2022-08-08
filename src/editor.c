@@ -11,6 +11,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+
+
 
 struct Editor {
     uint32_t termrows;
@@ -21,7 +24,30 @@ struct Editor {
     size_t n_rows;
     const char* target_filepath;
     size_t rowoffset;
+    char statusmsg[55];
 } ed;
+
+
+static void set_status_msg(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(ed.statusmsg, sizeof(ed.statusmsg), fmt, ap);
+    va_end(ap);
+}
+
+
+static void render_status_bar(struct Buffer* buf) {
+    bufinsert(buf, "\x1b[7m", 4);
+    size_t len = 0;
+
+    // Make status bar fill all the way from left to right.
+    bufinsert(buf, ed.statusmsg, strlen(ed.statusmsg));
+    while (len++ < ed.termcols - strlen(ed.statusmsg)) {
+        bufinsert(buf, " ", 1);
+    }
+
+    bufinsert(buf, "\x1b[m", 4);
+}
 
 
 /*
@@ -102,7 +128,10 @@ static void refresh_screen(void) {
     draw_rows(&buf);
     bufinsert(&buf, "\x1b[H", 3);
     bufinsert(&buf, "\x1b[?25h", 6);       // Show cursor.
-    bmove_cursor(&buf, ed.cxpos, (ed.cypos - ed.rowoffset));
+
+    bmove_cursor(&buf, 0, ed.termrows);
+    render_status_bar(&buf);
+    bmove_cursor(&buf, ed.cxpos, ed.cypos - ed.rowoffset);
     
     // Now write the whole buffer and destroy it.
     bufdump(buf);
@@ -196,7 +225,7 @@ static void editor_open(const char* filepath) {
 
     while ((line_len = getline(&line, &line_cap, fp)) != -1) {
         // Remove \r or \n.
-        while (line_len > 0 && line[line_len] == '\r' || line[line_len] == '\n') {
+        while ((line_len > 0 && line[line_len] == '\r') || line[line_len] == '\n') {
             --line_len;
         }
 
@@ -221,6 +250,9 @@ void run(const char* filepath) {
     ed.target_filepath = NULL;
     ed.cxpos = ed.cypos = 0;
     ed.rowoffset = 0;
+    ed.statusmsg[0] = 0;
+
+    memcpy(ed.statusmsg, filepath, sizeof(ed.statusmsg));
     
     getwinsize(&ed.termrows, &ed.termcols);
     editor_open(filepath);
