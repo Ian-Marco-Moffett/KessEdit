@@ -20,6 +20,7 @@ struct Editor {
     struct Buffer* rows;
     size_t n_rows;
     const char* target_filepath;
+    size_t rowoffset;
 } ed;
 
 
@@ -29,6 +30,17 @@ struct Editor {
  *  into the buffer.
  *
  */
+
+static void scroll(void) {
+    if (ed.cypos < ed.rowoffset) {
+        // Cursor is above visible window, scroll up.
+        ed.rowoffset = ed.cypos;
+    }
+
+    if (ed.cypos >= ed.rowoffset + ed.termrows) {
+        ed.rowoffset = ed.cypos - ed.termrows + 1;
+    }
+}
 
 static void bmove_cursor(struct Buffer* cur_buf, uint16_t x, uint16_t y) {
     char buf[50];
@@ -67,14 +79,15 @@ static void draw_welcome_msg(struct Buffer* buf) {
 
 static void draw_rows(struct Buffer* buf) {
     for (uint32_t i = 0; i < ed.termrows; ++i) {
+        size_t file_row = i + ed.rowoffset;
         bufinsert(buf, "\x1b[K", 3);            // Clear one line at a time.
 
         if (i == ed.termrows / 3) {
             draw_welcome_msg(buf);
-        } else if (i > ed.n_rows) {
+        } else if (i > ed.n_rows && file_row) {
             bufinsert(buf, "~\r\n", 3);
-        } else if (i < ed.n_rows) {
-            bufinsert(buf, ed.rows[i].data, ed.rows[i].len);
+        } else if (i < ed.n_rows && file_row) {
+            bufinsert(buf, ed.rows[file_row].data, ed.rows[file_row].len);
             bufinsert(buf, "\r", 2);              
         }
     }
@@ -82,13 +95,14 @@ static void draw_rows(struct Buffer* buf) {
 
 
 static void refresh_screen(void) {
+    scroll();
     struct Buffer buf = mkbuf();
     bufinsert(&buf, "\x1b[?25l", 6);        // Hide cursor.
     bufinsert(&buf, "\x1b[H", 3);
     draw_rows(&buf);
     bufinsert(&buf, "\x1b[H", 3);
     bufinsert(&buf, "\x1b[?25h", 6);       // Show cursor.
-    bmove_cursor(&buf, ed.cxpos, ed.cypos);
+    bmove_cursor(&buf, ed.cxpos, (ed.cypos - ed.rowoffset));
     
     // Now write the whole buffer and destroy it.
     bufdump(buf);
@@ -138,7 +152,7 @@ static void process_keystroke(char c) {
 
             break;
         case DOWN_ARROW:
-            if (ed.cypos < ed.termrows - 2) {
+            if (ed.cypos < ed.n_rows - 1) {
                 ++ed.cypos;
             }
 
@@ -182,7 +196,7 @@ static void editor_open(const char* filepath) {
 
     while ((line_len = getline(&line, &line_cap, fp)) != -1) {
         // Remove \r or \n.
-        while (line[line_len] == '\r' || line[line_len] == '\n') {
+        while (line_len > 0 && line[line_len] == '\r' || line[line_len] == '\n') {
             --line_len;
         }
 
@@ -206,6 +220,7 @@ static void editor_open(const char* filepath) {
 void run(const char* filepath) {
     ed.target_filepath = NULL;
     ed.cxpos = ed.cypos = 0;
+    ed.rowoffset = 0;
     
     getwinsize(&ed.termrows, &ed.termcols);
     editor_open(filepath);
