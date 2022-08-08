@@ -17,8 +17,9 @@ struct Editor {
     uint32_t termcols;
     uint16_t cxpos;             // Cursor x position.
     uint16_t cypos;             // Cursor y position.
-    struct Buffer row;
+    struct Buffer* rows;
     size_t n_rows;
+    const char* target_filepath;
 } ed;
 
 
@@ -73,8 +74,8 @@ static void draw_rows(struct Buffer* buf) {
         } else if (i > ed.n_rows) {
             bufinsert(buf, "~\r\n", 3);
         } else if (i < ed.n_rows) {
-            bufinsert(buf, ed.row.data, ed.row.len);
-            bufinsert(buf, "\r\n", 2);              
+            bufinsert(buf, ed.rows[i].data, ed.rows[i].len);
+            bufinsert(buf, "\r", 2);              
         }
     }
 }
@@ -157,28 +158,58 @@ static void process_keystroke(char c) {
     }
 }
 
-void editor_open(void) {
-    ed.n_rows = 1;
-    ed.row = mkbuf();
-    const char* line = "Hello, World!";
-    bufinsert(&ed.row, line, strlen(line));
-    write(STDOUT_FILENO, ed.row.data, ed.row.len);
+static void editor_open(const char* filepath) {
+    ed.target_filepath = filepath;
+
+    FILE* fp = fopen(filepath, "r");
+    if (fp == NULL && filepath != NULL) {
+        die("Could not open file!");
+    } else if (filepath == NULL) {
+        return;
+    }
+
+    char* line = NULL;
+    size_t line_cap = 0;
+    size_t line_len = 0;
+
+    // Make a row buffer.
+    ed.n_rows = 0;
+    ed.rows = malloc(sizeof(struct Buffer));
+
+    if (ed.rows == NULL) {
+        die("Failed to open file: allocation of ed.rows failure.");
+    }
+
+    while ((line_len = getline(&line, &line_cap, fp)) != -1) {
+        // Remove \r or \n.
+        while (line[line_len] == '\r' || line[line_len] == '\n') {
+            --line_len;
+        }
+
+        ed.rows = realloc(ed.rows, sizeof(struct Buffer) * (ed.n_rows + 2));
+        ed.rows[ed.n_rows] = mkbuf();
+        bufinsert(&ed.rows[ed.n_rows], line, strlen(line));
+        write(STDOUT_FILENO, ed.rows[ed.n_rows].data, ed.rows[ed.n_rows].len);
+        write(STDOUT_FILENO, "\r", 1);
+        ++ed.n_rows;
+    }
 
     // Ensure the cursor starts at (0, 0).
     struct Buffer buf = mkbuf();
     bmove_cursor(&buf, 0, 0);
     bufdump(buf);
     destroybuf(&buf);
+    free(line);
 }
 
 
-void run(void) {
+void run(const char* filepath) {
     ed.cxpos = ed.cypos = 0;
     
     getwinsize(&ed.termrows, &ed.termcols);
     refresh_screen();
 
-    editor_open();
+    editor_open(filepath);
 
     char c;
     while ((c = read_key()) != CTRL_KEY('q')) {

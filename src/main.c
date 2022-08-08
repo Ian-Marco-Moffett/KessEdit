@@ -2,11 +2,13 @@
 #include <termios.h>
 #include <stdlib.h>
 #include <editor.h>
+#include <stdio.h>
+#include <err.h>
 
 static struct termios normal_state;
 
 
-static void restore_state(void) {
+void restore_state(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &normal_state);
 }
 
@@ -21,11 +23,19 @@ static void enable_raw_mode(void) {
 }
 
 
-int main(void) {
+int main(int argc, char** argv) {
+    if (argc > 2) {
+        die("Too many args!");
+    }
+
     atexit(restore_state);
     enable_raw_mode();
 
-    run();
+    if (argc < 2) {
+        run(NULL);
+    } else {
+        run(argv[1]); 
+    }
 
     // Clear terminal.
     write(STDOUT_FILENO, "\x1b[2J", 4);

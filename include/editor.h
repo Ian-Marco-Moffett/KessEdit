@@ -2,8 +2,7 @@
 #define EDITOR_H
 
 
-void run(void);
-void editor_open(void);
+void run(const char* file_path);
 
 
 #endif
